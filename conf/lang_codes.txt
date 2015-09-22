@@ -1,0 +1,7 @@
+AR arabic
+DT dutch
+MD mandarin
+HG hungarian
+SW swahili
+UR urdu
+CA cantonese
