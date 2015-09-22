@@ -1,19 +1,27 @@
 import fst
-import codecs
-import os
-import cPickle as pickle
 import sys
+import os
+import codecs
+import cPickle as pickle
 from kitchen.text.converters import getwriter
 #import subprocess
 
 DATA_DIR = sys.argv[1]
-ALT_AR_FST = '/export/ws15-pt-data/rsloan/Arabic_ref_orthography_fst.txt.1'
-AR_FST_FILE = '/export/ws15-pt-data/rsloan/phonetisaurus-0.8a/phonetisaurus/script/ar_data/ar_pron.fst'
-OUT_DIR = "/export/ws15-pt/data/rsloan/arabic_ipa"
-CALLHOME_DICT = "/export/ws15-pt-data/rsloan/ar_pron.p"
-CALLHOME_FST = "/export/ws15-pt-data/rsloan/callhome_to_ipa.txt"
-QAC_DICT = '/export/ws15-pt-data/rsloan/qac.p'
-OOV_DICT = '/export/ws15-pt-data/rsloan/new_oov_dict.p'
+ALT_AR_FST =  os.environ["SBS_DATADIR"] + "/" + "rsloan/" +  "Arabic_ref_orthography_fst.txt.1"
+AR_FST_FILE = os.environ["SBS_DATADIR"] + "/" + "rsloan/" +  "phonetisaurus-0.8a/phonetisaurus/script/ar_data/ar_pron.fst"
+CALLHOME_DICT = os.environ["SBS_DATADIR"] + "/" + "rsloan/" + "ar_pron.p"
+CALLHOME_FST = os.environ["SBS_DATADIR"] + "/" + "rsloan/" + "callhome_to_ipa.txt"
+QAC_DICT = os.environ["SBS_DATADIR"] + "/" + "rsloan/" + "qac.p"
+OOV_DICT = os.environ["SBS_DATADIR"] + "/" + "rsloan/" + "new_oov_dict.p"
+
+#ALT_AR_FST = '/export/ws15-pt-data/rsloan/Arabic_ref_orthography_fst.txt.1'
+#AR_FST_FILE = '/export/ws15-pt-data/rsloan/phonetisaurus-0.8a/phonetisaurus/script/ar_data/ar_pron.fst'
+#OUT_DIR = "/export/ws15-pt/data/rsloan/arabic_ipa"
+#CALLHOME_DICT = "/export/ws15-pt-data/rsloan/ar_pron.p"
+#CALLHOME_FST = "/export/ws15-pt-data/rsloan/callhome_to_ipa.txt"
+#QAC_DICT = '/export/ws15-pt-data/rsloan/qac.p'
+#OOV_DICT = '/export/ws15-pt-data/rsloan/new_oov_dict.p'
+
 
 def create_ar_fst():
     '''creates fst for converting callhome dictionary pronunciations to arabic'''

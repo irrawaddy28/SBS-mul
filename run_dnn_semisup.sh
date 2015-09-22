@@ -10,7 +10,7 @@ set -o pipefail
 set -u
 
 # Set the location of the SBS speech
-SBS_CORPUS=/export/ws15-pt-data/data/audio
+SBS_CORPUS=${SBS_DATADIR}/audio
 
 LANG="SW"   # Target language
 

@@ -17,8 +17,10 @@ while [ "$1" != "" ]; do
     shift
 done
 
-export CPLUS_INCLUDE_PATH=/export/ws15-pt-data/kaldi-trunk/tools/openfst/include
-export LD_LIBRARY_PATH=/export/ws15-pt-data/kaldi-trunk/tools/openfst/include/fst:/export/ws15-pt-data/kaldi-trunk/tools/openfst/lib
-export PATH=/export/ws15-pt-data/kaldi-trunk/tools/openfst/bin:/export/ws15-pt-data/rsloan/phonetisaurus-0.8a/bin:/export/ws15-pt-data/rsloan/prefix/bin:$PATH
-export PYTHONPATH=/export/ws15-pt-data/rsloan/prefix/lib/python2.7/site-packages
-python /export/ws15-pt-data/rsloan/dt_to_ipa.py $dir $utts
+. ./path.sh
+
+export CPLUS_INCLUDE_PATH=${KALDI_ROOT}/tools/openfst/include
+export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${CPLUS_INCLUDE_PATH}/fst:${KALDI_ROOT}/tools/openfst/lib
+export PATH=${SBS_DATADIR}/rsloan/phonetisaurus-0.8a/bin:${SBS_DATADIR}/prefix/bin:$PATH
+export PYTHONPATH=${SBS_DATADIR}/rsloan/prefix/lib/python2.7/site-packages
+python local/dt_to_ipa.py $dir $utts

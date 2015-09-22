@@ -35,7 +35,7 @@ stage=0 # resume training with --stage=N
 . utils/parse_options.sh || exit 1;
 
 echo ==========================
-if [ $stage -le 0 ]; then
+if [ $stage -le -1 ]; then
 steps/align_fmllr.sh --nj "$train_nj" --cmd "$train_cmd" \
   data/train data/lang exp/tri3b exp/tri3b_ali
 fi

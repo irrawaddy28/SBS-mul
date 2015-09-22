@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-
+import sys
+import os
 import re
 import codecs
 import sys, getopt
@@ -12,11 +13,11 @@ import sys, getopt
 # Dictionary provided by Mark
 
 #Define a file path
-engPronuncToIpa = "/export/ws15-pt-data/data/misc/eng-ARPA2IPA.txt"
-engToPronunciation = "/export/ws15-pt-data/data/misc/eng-cmu-dict.txt"
-hungWordsToPronunciation = "/export/ws15-pt-data/data/misc/hungarian_lexicon_utf8.txt"
-hungPronunciationToIpa = "/export/ws15-pt-data/data/misc/hungarian_lexicon_phoneset_dictionary.txt"
-hungarianToIpa = "/export/ws15-pt-data/tkekona/HGTextStuff/Hungarian_ref_orthography_dict.txt"
+engPronuncToIpa =  os.environ["SBS_DATADIR"] + "/" + "misc/eng-ARPA2IPA.txt"
+engToPronunciation = os.environ["SBS_DATADIR"] + "/" + "misc/eng-cmu-dict.txt"
+hungWordsToPronunciation = os.environ["SBS_DATADIR"] + "/" +"misc/hungarian_lexicon_utf8.txt"
+hungPronunciationToIpa = os.environ["SBS_DATADIR"] + "/" + "misc/hungarian_lexicon_phoneset_dictionary.txt"
+hungarianToIpa = os.environ["SBS_DATADIR"] + "/" + "tkekona/" + "HGTextStuff/Hungarian_ref_orthography_dict.txt"
 Hnum = 0
 Enum = 0
 total = 0
@@ -24,8 +25,8 @@ def main(argv):
 
 	#The current hardcoded locations are for test purposes. These values are overwritten by the
 	#input parameters below
-	htextlist = "/export/ws15-pt-data/data/lists/hungarian/train.txt"
-	hungarianFileFolder = "/export/ws15-pt-data/tkekona/textfiles/hungarian/"
+	htextlist = os.environ["SBS_DATADIR"] + "/" + "lists/hungarian/train.txt"
+	hungarianFileFolder = os.environ["SBS_DATADIR"] + "/" + "tkekona/" + "textfiles/hungarian/"
 
 	try:
 		opts, args = getopt.getopt(argv,"hg:u:t:",["g2p=","utts=","transdir="])

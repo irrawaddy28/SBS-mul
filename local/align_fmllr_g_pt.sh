@@ -170,11 +170,17 @@ if [ $stage -le 3 ]; then
   #maxactive=7000; beam=20.0; lattice_beam=7.0; acwt=0.083333;
   #maxactive=7000; beam=20.0; lattice_beam=3.0; acwt=0.083333;
   maxactive=20000; beam=100.0; lattice_beam=3.0; acwt=0.083333;
-  $cmd JOB=1:$nj $dir/log/align_pass2.JOB.log \
+  #$cmd JOB=1:$nj $dir/log/align_pass2.JOB.log \
+    #gmm-latgen-faster --max-active=$maxactive --beam=$beam --lattice-beam=$lattice_beam --acoustic-scale=$acwt \
+      #--allow-partial=true --word-symbol-table=$lang/words.txt \
+      #$dir/final.mdl "ark:gunzip -c $dir/fsts.JOB.gz|" "$feats" ark:- \| \
+      #lattice-to-post --acoustic-scale=$acwt ark:- "ark:|gzip -c >$dir/post.JOB.gz"
+   $cmd JOB=1:$nj $dir/log/align_pass2.JOB.log \
     gmm-latgen-faster --max-active=$maxactive --beam=$beam --lattice-beam=$lattice_beam --acoustic-scale=$acwt \
       --allow-partial=true --word-symbol-table=$lang/words.txt \
-      $dir/final.mdl "ark:gunzip -c $dir/fsts.JOB.gz|" "$feats" ark:- \| \
-      lattice-to-post --acoustic-scale=$acwt ark:- "ark:|gzip -c >$dir/post.JOB.gz"
+      $dir/final.mdl "ark:gunzip -c $dir/fsts.JOB.gz|" "$feats" "ark:|gzip -c > $dir/lat.JOB.gz"
+   $cmd JOB=1:$nj $dir/log/lat-to-post.JOB.log \
+    lattice-to-post --acoustic-scale=$acwt "ark:gunzip -c $dir/lat.JOB.gz|"  "ark:|gzip -c >$dir/post.JOB.gz"
 fi
 
 rm $dir/pre_ali.*.gz

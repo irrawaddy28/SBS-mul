@@ -1,11 +1,13 @@
 #!/bin/bash -e
 
-# This script shows the steps needed to build a recognizer for certain matched languages (Arabic, Dutch, Mandarin, Hungarian, Swahili, Urdu) of the SBS corpus.
+# This script shows the steps needed to build multilingual recognizer for 
+# certain matched languages (Arabic, Dutch, Mandarin, Hungarian, Swahili, Urdu) 
+# of the SBS corpus. A language not part of the training languages is treated as
+# the test language. 
 # (Adapted from the egs/gp script run.sh)
 
 echo "This shell script may run as-is on your system, but it is recommended
 that you run the commands one by one by copying and pasting into the shell."
-# exit 1;
 
 [ -f cmd.sh ] && source ./cmd.sh \
   || echo "cmd.sh not found. Jobs may not execute properly."
@@ -13,43 +15,66 @@ that you run the commands one by one by copying and pasting into the shell."
 . path.sh || { echo "Cannot source path.sh"; exit 1; }
 
 # Set the location of the SBS speech
-SBS_CORPUS=/export/ws15-pt-data/data/audio
-SBS_TRANSCRIPTS=/export/ws15-pt-data/data/transcripts/matched
-SBS_DATA_LISTS=/export/ws15-pt-data/data/lists
+# ${SBS_DATADIR} is defined in path.sh 
+SBS_CORPUS=${SBS_DATADIR}/audio
+SBS_TRANSCRIPTS=${SBS_DATADIR}/transcripts/matched
+SBS_DATA_LISTS=${SBS_DATADIR}/lists
+TEXT_PHONE_LM=${SBS_DATADIR}/text-phnlm
 NUMLEAVES=1200
 NUMGAUSSIANS=8000
 
 # Set the language codes for SBS languages that we will be processing
-export SBS_LANGUAGES="AR CA DT HG MD SW UR"
-export TRAIN_LANG="AR CA DT HG MD UR"
+export SBS_LANGUAGES="AR CA HG MD SW UR" # exclude DT, error in dt_to_ipa.py
+export TRAIN_LANG="AR CA HG MD UR"
 export TEST_LANG="SW"
+export UNILANG_CODE=$(echo $TRAIN_LANG |sed 's/ /_/g')
 
-#### LANGUAGE SPECIFIC SCRIPTS HERE ####
+#stage=2
+
+#if [ $stage -ge 1 ]; then
+# Data prep: monolingual in data/$L/{train,dev,eval,wav}
 local/sbs_data_prep.sh --config-dir=$PWD/conf --corpus-dir=$SBS_CORPUS \
   --languages="$SBS_LANGUAGES"  --trans-dir=$SBS_TRANSCRIPTS --list-dir=$SBS_DATA_LISTS
 
-local/sbs_uni_data_prep.sh "$TRAIN_LANG" "$TEST_LANG"
+# Data prep: multilingual in data/{train,dev,eval}
+local/sbs_uni_data_prep.sh "$TRAIN_LANG" "$TEST_LANG" 
 
+# Dictionaries: monolingual in data/$L/local/dict ; multilingual in data/local/dict
 echo "dict prep"
 local/sbs_dict_prep.sh $SBS_LANGUAGES
 
+# Lexicon: monolingual in data/$L/lang/{L.fst,L_disambig.fst,phones.txt,words.txt}
 for L in $SBS_LANGUAGES; do
   echo "lang prep: $L"
   utils/prepare_lang.sh --position-dependent-phones false \
     data/$L/local/dict "<unk>" data/$L/local/lang_tmp data/$L/lang
 done
 
+# LM (based on training text): monolingual in data/$L/lang_test/G.fst
 for L in $SBS_LANGUAGES; do
   echo "LM prep: $L"
   local/sbs_format_phnlm.sh $L
 done
 
+# Lexicon: multilingual in data/lang/{L.fst,L_disambig.fst,phones.txt,words.txt}
 echo "universal lang"
 utils/prepare_lang.sh --position-dependent-phones false \
   data/local/dict "<unk>" data/local/lang_tmp data/lang
-
+  
+# LM (based on training text): multilingual in data/lang_test/G.fst 
 echo "universal LM"
 local/sbs_format_uniphnlm.sh
+
+# Lexicon + LM (based on wiki text): monolingual in 
+# data/$L/lang_test_text_G/{L.fst, L_disambig.gst,G.fst}
+for L in $SBS_LANGUAGES; do
+  echo "Prep text G for $L"
+  local/sbs_format_text_G.sh --text-phone-lm $TEXT_PHONE_LM $L
+done
+
+# Now move all multilingual data to data/${UNILANG_CODE}
+mkdir -p data/${UNILANG_CODE}
+mv data/{train,dev,eval,local,lang,lang_test} data/${UNILANG_CODE}
 
 echo "MFCC prep"
 # Make MFCC features.
@@ -57,95 +82,172 @@ for L in $SBS_LANGUAGES; do
   mfccdir=mfcc/$L
   for x in train dev eval; do
     (
-      steps/make_mfcc.sh --nj 4 --cmd "$train_cmd" data/$L/$x exp/$L/make_mfcc/$x $mfccdir
-      steps/compute_cmvn_stats.sh data/$L/$x exp/$L/make_mfcc/$x $mfccdir
+      steps/make_mfcc.sh --nj 4 --cmd "$train_cmd" data/$L/$x exp/make_mfcc/$L/$x $mfccdir
+      steps/compute_cmvn_stats.sh data/$L/$x exp/make_mfcc/$L/$x $mfccdir
     ) &
   done
 done
 wait
 
-mfccdir=mfcc
+mfccdir=mfcc/${UNILANG_CODE}
 for x in train dev eval; do
   (
-    steps/make_mfcc.sh --nj 4 --cmd "$train_cmd" data/$x exp/make_mfcc/$x $mfccdir
-    steps/compute_cmvn_stats.sh data/$x exp/make_mfcc/$x $mfccdir
+    steps/make_mfcc.sh --nj 4 --cmd "$train_cmd" data/${UNILANG_CODE}/$x exp/make_mfcc/${UNILANG_CODE}/$x $mfccdir
+    steps/compute_cmvn_stats.sh data/${UNILANG_CODE}/$x exp/make_mfcc/${UNILANG_CODE}/$x $mfccdir
   ) &
 done
 wait
 
-mkdir -p exp/mono;
+# Train monophone models
+mkdir -p exp/mono/${TEST_LANG};
 steps/train_mono.sh --nj 8 --cmd "$train_cmd" \
-  data/train data/lang exp/mono
+  data/${UNILANG_CODE}/train data/${UNILANG_CODE}/lang exp/mono/${TEST_LANG}
 
-graph_dir=exp/mono/graph
+# Make HCLG graph: with monolingual LG (data/$L/lang_test/*, LM from wiki) 
+graph_dir=exp/mono/${TEST_LANG}/graph_text_G
 mkdir -p $graph_dir
+utils/mkgraph.sh --mono data/${TEST_LANG}/lang_test_text_G exp/mono/${TEST_LANG} \
+    $graph_dir >& $graph_dir/mkgraph.log
 
-utils/mkgraph.sh --mono data/lang_test exp/mono $graph_dir
+# Decode using monophone models     
+steps/decode.sh --nj 4 --cmd "$decode_cmd" $graph_dir data/${TEST_LANG}/dev \
+    exp/mono/${TEST_LANG}/decode_dev_text_G &
+steps/decode.sh --nj 4 --cmd "$decode_cmd" $graph_dir data/${TEST_LANG}/eval \
+    exp/mono/${TEST_LANG}/decode_eval_text_G &
 
-for L in $SBS_LANGUAGES; do
-  steps/decode.sh --nj 4 --cmd "$decode_cmd" $graph_dir data/$L/dev \
-    exp/mono/decode_dev_$L &
-done
-wait
+## Make HCLG graph, with multilingual LG (data/lang_test/*, LM from oracle)
+#graph_dir=exp/mono/graph
+#mkdir -p $graph_dir
+#utils/mkgraph.sh --mono data/lang_test exp/mono $graph_dir
+    
+#for L in $SBS_LANGUAGES; do
+  #steps/decode.sh --nj 4 --cmd "$decode_cmd" $graph_dir data/$L/dev \
+    #exp/mono/decode_dev_$L &
+#done
 
-# Training/decoding triphone models
-mkdir -p exp/mono_ali
+
+# Align features using monophone models
+mkdir -p exp/mono_ali/${TEST_LANG}
 steps/align_si.sh --nj 8 --cmd "$train_cmd" \
-  data/train data/lang exp/mono exp/mono_ali
+  data/${UNILANG_CODE}/train data/${UNILANG_CODE}/lang exp/mono/${TEST_LANG} exp/mono_ali/${TEST_LANG}
 
-# Training triphone models with MFCC+deltas+double-deltas
+# Train triphone models with MFCC+deltas+double-deltas
 mkdir -p exp/tri1
 steps/train_deltas.sh --boost-silence 1.25 --cmd "$train_cmd" $NUMLEAVES $NUMGAUSSIANS \
-  data/train data/lang exp/mono_ali exp/tri1
-
-graph_dir=exp/tri1/graph
+  data/${UNILANG_CODE}/train data/${UNILANG_CODE}/lang exp/mono_ali/${TEST_LANG} exp/tri1/${TEST_LANG}
+  
+# Make HCLG graph: with monolingual LG (data/$L/lang_test/*, LM from wiki)
+graph_dir=exp/tri1/${TEST_LANG}/graph_text_G
 mkdir -p $graph_dir
+utils/mkgraph.sh data/${TEST_LANG}/lang_test_text_G exp/tri1/${TEST_LANG} $graph_dir
 
-utils/mkgraph.sh data/lang_test exp/tri1 $graph_dir
+# Decode using triphone models
+steps/decode.sh --nj 4 --cmd "$decode_cmd" $graph_dir data/${TEST_LANG}/dev \
+    exp/tri1/${TEST_LANG}/decode_dev_text_G &
+steps/decode.sh --nj 4 --cmd "$decode_cmd" $graph_dir data/${TEST_LANG}/eval \
+    exp/tri1/${TEST_LANG}/decode_eval_text_G &    
 
-for L in $SBS_LANGUAGES; do
-  steps/decode.sh --nj 4 --cmd "$decode_cmd" $graph_dir data/$L/dev \
-    exp/tri1/decode_dev_$L &
-done
-wait
+## Make HCLG graph, with multilingual LG (data/lang_test/*, LM from oracle)
+#graph_dir=exp/tri1/graph
+#mkdir -p $graph_dir
 
-mkdir -p exp/tri1_ali
+#utils/mkgraph.sh data/lang_test exp/tri1 $graph_dir
+
+#for L in $SBS_LANGUAGES; do
+  #steps/decode.sh --nj 4 --cmd "$decode_cmd" $graph_dir data/$L/dev \
+    #exp/tri1/decode_dev_$L &
+#done
+#wait
+
+# Align features using triphone models
+mkdir -p exp/tri1_ali/${TEST_LANG}
 steps/align_si.sh --nj 8 --cmd "$train_cmd" \
-  data/train data/lang exp/tri1 exp/tri1_ali
-
-mkdir -p exp/tri2b
-steps/train_lda_mllt.sh --cmd "$train_cmd" \
-  --splice-opts "--left-context=3 --right-context=3" $NUMLEAVES $NUMGAUSSIANS \
-  data/train data/lang exp/tri1_ali exp/tri2b
+  data/${UNILANG_CODE}/train data/${UNILANG_CODE}/lang exp/tri1/${TEST_LANG} exp/tri1_ali/${TEST_LANG}
 
 # Train with LDA+MLLT transforms
-graph_dir=exp/tri2b/graph
+mkdir -p exp/tri2b/${TEST_LANG}
+steps/train_lda_mllt.sh --cmd "$train_cmd" \
+  --splice-opts "--left-context=3 --right-context=3" $NUMLEAVES $NUMGAUSSIANS \
+  data/${UNILANG_CODE}/train data/${UNILANG_CODE}/lang exp/tri1_ali/${TEST_LANG} exp/tri2b/${TEST_LANG}
+
+# Make HCLG graph: with monolingual LG (data/$L/lang_test/*, LM from wiki)
+# Decode using LDA+MLLT models. It is expected that the all languages which
+# have training data have significantly better error rates than the
+# test language which does not have any training data.
+for L in ${TEST_LANG} ${TRAIN_LANG}; do
+graph_dir=exp/tri2b/${TEST_LANG}/graph_text_G_$L
 mkdir -p $graph_dir
+utils/mkgraph.sh data/${TEST_LANG}/lang_test_text_G exp/tri2b/${TEST_LANG} $graph_dir
 
-utils/mkgraph.sh data/lang_test exp/tri2b $graph_dir
 
-for L in $SBS_LANGUAGES; do
-  steps/decode.sh --nj 4 --cmd "$decode_cmd" $graph_dir data/$L/dev \
-    exp/tri2b/decode_dev_$L &
+steps/decode.sh --nj 4 --cmd "$decode_cmd" $graph_dir data/$L/dev \
+    exp/tri2b/${TEST_LANG}/decode_dev_text_G_$L &
+steps/decode.sh --nj 4 --cmd "$decode_cmd" $graph_dir data/$L/eval \
+    exp/tri2b/${TEST_LANG}/decode_eval_text_G_$L &    
+    
+(cd exp/tri2b/${TEST_LANG}; ln -s  decode_dev_text_G_$L decode_dev_$L; ln -s decode_eval_text_G_$L decode_eval_$L)
 done
 wait
+## Make HCLG graph, with multilingual LG (data/lang_test/*, LM from oracle)
+#graph_dir=exp/tri2b/graph
+#mkdir -p $graph_dir
 
-mkdir -p exp/tri2b_ali
+#utils/mkgraph.sh data/lang_test exp/tri2b $graph_dir
+
+#for L in $SBS_LANGUAGES; do
+  #steps/decode.sh --nj 4 --cmd "$decode_cmd" $graph_dir data/$L/dev \
+    #exp/tri2b/decode_dev_$L &
+#done
+#wait
+
+# Align features using LDA+MLLT models
+mkdir -p exp/tri2b_ali/${TEST_LANG}
 steps/align_si.sh --nj 8 --cmd "$train_cmd" --use-graphs true \
-  data/train data/lang exp/tri2b exp/tri2b_ali
+  data/${UNILANG_CODE}/train data/${UNILANG_CODE}/lang exp/tri2b/${TEST_LANG} exp/tri2b_ali/${TEST_LANG}
 
+# Train SAT models
 steps/train_sat.sh --cmd "$train_cmd" $NUMLEAVES $NUMGAUSSIANS \
-  data/train data/lang exp/tri2b_ali exp/tri3b
+  data/${UNILANG_CODE}/train data/${UNILANG_CODE}/lang exp/tri2b_ali/${TEST_LANG} exp/tri3b/${TEST_LANG}
 
-graph_dir=exp/tri3b/graph
+# Make HCLG graph, with monolingual LG (data/$L/lang_test/*, LM from wiki)
+# Decode using SAT models. It is expected that the all languages which
+# have training data have significantly better error rates than the
+# test language which does not have any training data.
+for L in ${TEST_LANG} ${TRAIN_LANG}; do
+graph_dir=exp/tri3b/${TEST_LANG}/graph_text_G_$L
 mkdir -p $graph_dir
-utils/mkgraph.sh data/lang_test exp/tri3b $graph_dir
+utils/mkgraph.sh data/${TEST_LANG}/lang_test_text_G exp/tri3b/${TEST_LANG} $graph_dir
 
-for L in $SBS_LANGUAGES; do
-  steps/decode_fmllr.sh --nj 4 --cmd "$decode_cmd" $graph_dir data/$L/dev \
-    exp/tri3b/decode_dev_$L &
+steps/decode_fmllr.sh --nj 4 --cmd "$decode_cmd" $graph_dir data/$L/dev \
+    exp/tri3b/${TEST_LANG}/decode_dev_text_G_$L &
+steps/decode_fmllr.sh --nj 4 --cmd "$decode_cmd" $graph_dir data/$L/eval \
+    exp/tri3b/${TEST_LANG}/decode_eval_text_G_$L &
+    
+(cd exp/tri3b/${TEST_LANG}; ln -s  decode_dev_text_G_$L decode_dev_$L; ln -s decode_eval_text_G_$L decode_eval_$L)
 done
 wait
+
+## Make HCLG graph, with multilingual LG (data/lang_test/*, LM from oracle)
+#graph_dir=exp/tri3b/graph
+#mkdir -p $graph_dir
+#utils/mkgraph.sh data/${TEST_LANG}/lang_test exp/tri3b $graph_dir
+
+#for L in $SBS_LANGUAGES; do
+  #steps/decode_fmllr.sh --nj 4 --cmd "$decode_cmd" $graph_dir data/$L/dev \
+    #exp/tri3b/decode_dev_$L &
+#done
+#wait
+
+# Align features using SAT models
+mkdir -p exp/tri3b_ali/${TEST_LANG}
+steps/align_fmllr.sh --nj 8 --cmd "$train_cmd" \
+	data/${UNILANG_CODE}/train data/${UNILANG_CODE}/lang exp/tri3b/${TEST_LANG} exp/tri3b_ali/${TEST_LANG} || exit 1;
 
 # Getting PER numbers
-# for x in exp/*/*/decode*; do [ -d $x ] && grep WER $x/wer_* | utils/best_wer.sh; done
+for x in exp/*/*/decode*; do [ -d $x ] && grep WER $x/wer_* | utils/best_wer.sh; done | grep dev
+for x in exp/*/*/decode*; do [ -d $x ] && grep WER $x/wer_* | utils/best_wer.sh; done | grep eval
+#fi
+
+#if [ $stage -ge 2 ]; then
+#./run-pt-text-G-map-2.sh ${TRAIN_LANG} ${TEST_LANG}
+#fi

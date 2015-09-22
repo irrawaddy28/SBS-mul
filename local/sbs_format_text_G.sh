@@ -5,6 +5,8 @@
 set -o errexit
 set -o pipefail
 
+. ./path.sh
+
 function read_dirname () {
   local dir_name=`expr "X$1" : '[^=]*=\(.*\)'`;
   [ -d "$dir_name" ] || { echo "Argument '$dir_name' not a directory" >&2; \
@@ -22,7 +24,7 @@ if [ $# -lt 1 ]; then
   echo -e $usage; exit 1;
 fi
 
-TEXT_PHONE_LM=/export/ws15-pt-data/data/text-phnlm
+TEXT_PHONE_LM=${SBS_DATADIR}/text-phnlm
 
 while [ $# -gt 0 ];
 do

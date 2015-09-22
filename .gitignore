@@ -1,0 +1,9 @@
+extra_oov.txt
+HungPriorityCorrectOrthMemory.txt
+conf/arabic
+conf/cantonese
+conf/hungarian
+conf/mandarin/phones.txt
+conf/phones.txt
+conf/swahili/phones.txt
+conf/urdu/phones.txt

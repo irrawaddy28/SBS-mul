@@ -1,4 +1,5 @@
 import fst
+import os
 import codecs
 import sys
 import cPickle as pickle
@@ -7,10 +8,15 @@ from kitchen.text.converters import getwriter
 
 DATA_DIR = sys.argv[1]
 FILE_LIST = sys.argv[2]
-DUTCH_FST_FILE = '/export/ws15-pt-data/rsloan/Dutch_ref_orthography_fst.txt'
-DUTCH_DICT = '/export/ws15-pt-data/rsloan/dt_pron.p'
-EN_DICT = '/export/ws15-pt-data/rsloan/en_pron.p'
-PHONETISAURUS_FILE = '/export/ws15-pt-data/rsloan/phonetisaurus-0.8a/phonetisaurus/script/dt_data/dt_pron.fst'
+DUTCH_FST_FILE = os.environ["SBS_DATADIR"] + "/" + "rsloan/" +  "Dutch_ref_orthography_fst.txt"
+DUTCH_DICT = os.environ["SBS_DATADIR"] + "/" + "rsloan/" +  "dt_pron.p"
+EN_DICT = os.environ["SBS_DATADIR"] + "/" + "rsloan/" +  "en_pron.p"
+PHONETISAURUS_FILE = os.environ["SBS_DATADIR"] + "/" + "rsloan/" + "phonetisaurus-0.8a/phonetisaurus/script/dt_data/dt_pron.fst"
+
+#DUTCH_FST_FILE = '/export/ws15-pt-data/rsloan/Dutch_ref_orthography_fst.txt'
+#DUTCH_DICT = '/export/ws15-pt-data/rsloan/dt_pron.p'
+#EN_DICT = '/export/ws15-pt-data/rsloan/en_pron.p'
+#PHONETISAURUS_FILE = '/export/ws15-pt-data/rsloan/phonetisaurus-0.8a/phonetisaurus/script/dt_data/dt_pron.fst'
 #OUTFILE = '/export/ws15-pt-data/rsloan/dt_oov.txt'
 
 def create_dt_fst():
@@ -60,8 +66,8 @@ def word_to_pron(word):
         #outfile.write(word + '\n')
         #return word
        # if len(word) < 15:
-        #print "using phonetisaurus on word: " + word
-        pron = subprocess.check_output(['phonetisaurus-g2p', '--model='+PHONETISAURUS_FILE,'--input='+word])
+        #print "using phonetisaurus on word: " + word 
+        pron = subprocess.check_output(['phonetisaurus-g2p', ' --model='+PHONETISAURUS_FILE,' --input='+word])
         pron = pron.rstrip()
         endnum = pron.index('\t')
         pron = pron[endnum+1:]

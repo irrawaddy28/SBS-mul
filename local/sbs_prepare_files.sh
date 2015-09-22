@@ -74,7 +74,7 @@ mkdir -p conf/${full_name}
 soxerr=$tmpdir/soxerr;
 
 for x in train dev eval; do
-    echo "Downsampling"
+    echo "Downsampling: $LCODE, $x"
 
     file="$LISTDIR/$full_name/$x.txt"
     mkdir -p data/$LCODE/wav/$x

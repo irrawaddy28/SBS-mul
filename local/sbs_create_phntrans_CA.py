@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import re
 import codecs
-import sys, getopt
+import sys, getopt, os
 
 # This program reads hungarian text and converts it to IPA characters.
 # It first reads through the text and tries to find English Words
@@ -12,11 +12,17 @@ import sys, getopt
 # Dictionary provided by Mark
 
 #Define a file path
-w2pdict = "/export/ws15-pt-data/tkekona/cantonese/data/dict.txt"
-p2idict = "/export/ws15-pt-data/tkekona/cantonese/data/g2p_dict.txt"
+w2pdict = os.environ["SBS_DATADIR"] + "/" +  "tkekona/" + "cantonese/data/dict.txt"
+p2idict = os.environ["SBS_DATADIR"] + "/" +  "tkekona/" + "cantonese/data/g2p_dict.txt"
 oovchar = open("conf/cantonese/oovchar.txt", 'w')
 oovpronun = open("conf/cantonese/oovpronun.txt", 'w')
 results = open("conf/cantonese/cntrans.txt", 'w')
+
+#w2pdict = "/export/ws15-pt-data/tkekona/cantonese/data/dict.txt"
+#p2idict = "/export/ws15-pt-data/tkekona/cantonese/data/g2p_dict.txt"
+#oovchar = open("conf/cantonese/oovchar.txt", 'w')
+#oovpronun = open("conf/cantonese/oovpronun.txt", 'w')
+#results = open("conf/cantonese/cntrans.txt", 'w')
 oov = {}	
 
 
