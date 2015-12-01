@@ -86,8 +86,13 @@ if [[ $stage -le 20 ]]; then
   
   # Now fine tine the DNN using the decoded unsup lattice. Use different levels of frame weighting derived from best path lattice.
   # Use the fMLLR transforms from tri3b_ali/decode_* and training lattices from the DNN directory ${lats_unsup_dir}
-  for thresh in 0.5 0.6 0.7 0.8 0.9 ; do
-    (./run_dnn_adapt_to_mono_pt_frame_wt.sh --transform-dir-train "exp/tri3b_ali/${TEST_LANG}/decode_${unsup_dir_tag}_${TEST_LANG}" --replace-softmax "true" --threshold ${thresh} \
+  thresh=0.5
+  ./run_dnn_adapt_to_mono_pt_frame_wt.sh --transform-dir-train "exp/tri3b_ali/${TEST_LANG}/decode_${unsup_dir_tag}_${TEST_LANG}" --replace-softmax "true" --threshold ${thresh} \
+	  "${TEST_LANG}" exp/tri3b_ali/${TEST_LANG}  ${lats_unsup_dir} \
+	  ${dnn_dir}/monosoftmax_dt/final.nnet \
+	  data-fmllr-tri3b/${TEST_LANG} ${dnn_dir}/monosoftmax_asrpt_fw${thresh}
+  for thresh in 0.6 0.7 0.8 0.9 ; do
+    (./run_dnn_adapt_to_mono_pt_frame_wt.sh --stage 2 --transform-dir-train "exp/tri3b_ali/${TEST_LANG}/decode_${unsup_dir_tag}_${TEST_LANG}" --replace-softmax "true" --threshold ${thresh} \
 	  "${TEST_LANG}" exp/tri3b_ali/${TEST_LANG}  ${lats_unsup_dir} \
 	  ${dnn_dir}/monosoftmax_dt/final.nnet \
 	  data-fmllr-tri3b/${TEST_LANG} ${dnn_dir}/monosoftmax_asrpt_fw${thresh} || exit 1;) &
