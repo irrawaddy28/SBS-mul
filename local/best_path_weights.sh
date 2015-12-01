@@ -41,29 +41,34 @@ write_ali_dir=true
 acwt=0.1
 #end configuration section.
 
-help_message="Usage: "$(basename $0)" [options] <data-dir> <graph-dir|lang-dir> <decode-dir1>[:weight] <decode-dir2>[:weight] [<decode-dir3>[:weight] ... ] <out-dir>
+help_message="Usage: "$(basename $0)" [options] <decode-dir1>[:weight] <decode-dir2>[:weight] [<decode-dir3>[:weight] ... ] <out-dir>
      E.g. "$(basename $0)" data/train_unt.seg data/lang exp/tri1/decode:0.5 exp/tri2/decode:0.25 exp/tri3/decode:0.25 exp/combine
 Options:
   --cmd (run.pl|queue.pl...)      # specify how to run the sub-processes.
 ";
 
+echo "$0 $@"  # Print the command line for logging
+
 [ -f ./path.sh ] && . ./path.sh
 . parse_options.sh || exit 1;
 
 
-if [ $# -lt 4 ]; then
+if [ $# -lt 2 ]; then
   printf "$help_message\n";
   exit 1;
 fi
 
-data=$1
-lang=$2
+#data=$1
 dir=${@: -1}  # last argument to the script
-shift 2;
+#shift 1;
 decode_dirs=( $@ )  # read the remaining arguments into an array
 unset decode_dirs[${#decode_dirs[@]}-1]  # 'pop' the last argument which is odir
 num_sys=${#decode_dirs[@]}  # number of systems to combine
 
+echo -e "\t\t acwt = $acwt		 
+		 decode_dirs = $decode_dirs
+		 num_sys = $num_sys
+		 out dir = $dir\n"
 mkdir -p $dir
 mkdir -p $dir/log
 
@@ -75,9 +80,9 @@ if $write_ali_dir; then
 else
   out_decode=$dir/`basename $decode_dir`
 fi
-mkdir -p $out_decode
 
-if [ $stage -lt -1 ]; then
+echo "Generating alignments from best path"
+if [ $stage -lt -1 ]; then  
   mkdir -p $out_decode/log
   $cmd JOB=1:$nj $out_decode/log/best_path.JOB.log \
     lattice-best-path --acoustic-scale=$acwt \
@@ -86,7 +91,6 @@ if [ $stage -lt -1 ]; then
 fi
 
 weights_sum=0.0
-
 for i in `seq 0 $[num_sys-1]`; do
   decode_dir=${decode_dirs[$i]}
 
@@ -103,6 +107,7 @@ for i in `seq 0 $[num_sys-1]`; do
 done
 
 inv_weights_sum=`perl -e "print STDOUT 1.0/$weights_sum"`
+echo "weights sum = $weights_sum, inv weights sum = $inv_weights_sum"
 
 for i in `seq 0 $[num_sys-1]`; do
   if [ $stage -lt $i ]; then
@@ -127,10 +132,10 @@ for i in `seq 0 $[num_sys-1]`; do
     fi
 
     $cmd JOB=1:$nj $dir/log/get_post.$i.JOB.log \
-      lattice-to-post --acoustic-scale=0.1 \
+      lattice-to-post --acoustic-scale=$acwt \
       "ark,s,cs:gunzip -c $decode_dir/lat.JOB.gz|" ark:- \| \
       post-to-pdf-post $model ark,s,cs:- ark:- \| \
-      get-post-on-ali ark,s,cs:- "ark,s,cs:gunzip -c $out_decode/ali.JOB.gz | convert-ali $dir/final.mdl $model $tree ark,s,cs:- ark:- | ali-to-pdf $model ark,s,cs:- ark:- |" "ark:| gzip -c > $out_decode/weights.$i.JOB.gz" || exit 1
+      get-post-on-ali ark,s,cs:- "ark,s,cs:gunzip -c $out_decode/ali.JOB.gz | convert-ali $dir/final.mdl $model $tree ark,s,cs:- ark:- | ali-to-pdf $model ark,s,cs:- ark:- |" "ark,t:| gzip -c > $out_decode/weights.$i.JOB.gz" || exit 1
   fi
 done
 
@@ -144,5 +149,7 @@ if [ $stage -lt $num_sys ]; then
       "ark:| vector-scale --scale=$inv_weights_sum ark:- ark:- | gzip -c > $out_decode/weights.JOB.gz" || exit 1
   fi
 fi
+
+echo -e "Done getting best path weights\n"
 
 exit 0

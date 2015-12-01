@@ -175,12 +175,14 @@ if [ $stage -le 3 ]; then
       #--allow-partial=true --word-symbol-table=$lang/words.txt \
       #$dir/final.mdl "ark:gunzip -c $dir/fsts.JOB.gz|" "$feats" ark:- \| \
       #lattice-to-post --acoustic-scale=$acwt ark:- "ark:|gzip -c >$dir/post.JOB.gz"
+   mkdir -p $dir/decode_train
    $cmd JOB=1:$nj $dir/log/align_pass2.JOB.log \
     gmm-latgen-faster --max-active=$maxactive --beam=$beam --lattice-beam=$lattice_beam --acoustic-scale=$acwt \
       --allow-partial=true --word-symbol-table=$lang/words.txt \
-      $dir/final.mdl "ark:gunzip -c $dir/fsts.JOB.gz|" "$feats" "ark:|gzip -c > $dir/lat.JOB.gz"
+      $dir/final.mdl "ark:gunzip -c $dir/fsts.JOB.gz|" "$feats" "ark:|gzip -c > $dir/decode_train/lat.JOB.gz"
    $cmd JOB=1:$nj $dir/log/lat-to-post.JOB.log \
-    lattice-to-post --acoustic-scale=$acwt "ark:gunzip -c $dir/lat.JOB.gz|"  "ark:|gzip -c >$dir/post.JOB.gz"
+    lattice-to-post --acoustic-scale=$acwt "ark:gunzip -c $dir/decode_train/lat.JOB.gz|"  "ark:|gzip -c >$dir/post.JOB.gz"
+   echo $nj > $dir/decode_train/num_jobs 
 fi
 
 rm $dir/pre_ali.*.gz

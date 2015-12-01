@@ -57,13 +57,20 @@ find $SBSDIR/${full_name}_unlabeled -name "*.wav" > $tmpdir/wav_list
 for x in `cat $tmpdir/wav_list`; do
   y=`basename $x`
   z=${y%*.wav}
-  echo "$z $x" 
+  spk=${y%-*}
+  #echo "$z $x"
+  echo "$spk $x" 
 done > $tmpdir/wav_tmp_scp
 
-cat data/$LCODE/train/wav.scp > $tmpdir/exclude_list
-cat data/$LCODE/eval/wav.scp >> $tmpdir/exclude_list 
-cat data/$LCODE/dev/wav.scp >> $tmpdir/exclude_list || true
+#cat data/$LCODE/train/wav.scp > $tmpdir/exclude_list
+#cat data/$LCODE/eval/wav.scp >> $tmpdir/exclude_list 
+#cat data/$LCODE/dev/wav.scp >> $tmpdir/exclude_list
+#utils/filter_scp.pl --exclude <(sort -k1,1 $tmpdir/exclude_list) $tmpdir/wav_tmp_scp | awk '{print $2}' > $tmpdir/unsup_wav_list
 
+# filter by spkid: if a spkid is present in the exclude_list, then unsup_wav list shouldn't have any utt from that speaker
+cat data/$LCODE/train/spk2utt > $tmpdir/exclude_list
+cat data/$LCODE/eval/spk2utt >> $tmpdir/exclude_list 
+cat data/$LCODE/dev/spk2utt >> $tmpdir/exclude_list
 utils/filter_scp.pl --exclude <(sort -k1,1 $tmpdir/exclude_list) $tmpdir/wav_tmp_scp | awk '{print $2}' > $tmpdir/unsup_wav_list
 
 for x in `cat $tmpdir/unsup_wav_list`; do
