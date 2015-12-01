@@ -141,7 +141,7 @@ for thresh in 0.5 0.6 0.7 0.8 0.9 ; do
   for num_copies in 0 1 2 3 4; do
   ./run_dnn_multilingual.sh --dnn-init "${dnn_dir}/monosoftmax_dt/final.nnet" --data-type-csl "pt:dt"  --lang-weight-csl "1.0:1.0"  \
     --threshold-csl "${thresh}:0.0" --lat-dir-csl "${lats_pt_dir}:-" --dup-and-merge-csl "${num_copies}>>1:0>>0" \
-	"${TEST_LANG}:${UNILANG_CODE}" "${ali_pt_dir}:${ali_dt_idir}" \
+	"${TEST_LANG}:${UNILANG_CODE}" "${ali_pt_dir}:${ali_dt_dir}" \
 	"${data_fmllr_dir}/${TEST_LANG}/train:${data_fmllr_dir}/${UNILANG_CODE}/train" ${data_fmllr_dir}/combined_fw${thresh}_cop${num_copies} \
 	$dnn_dir/multisoftmax_pt_fw${thresh}_cop${num_copies} &
   done
