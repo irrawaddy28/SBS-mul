@@ -186,8 +186,8 @@ for nutts_small_unsup in 4000 ; do  # 4000 3000 2000 1000
   for thresh_pt in 0.6 ; do  # 0.6 0.7 0.8
     for thresh_unsup in 0.9; do # 0.7 0.9
     
-      for num_copies_pt in 0 2 4; do # 0 2 4
-        for num_copies_unsup in 0 1 2 3 4; do # 0 1
+      for num_copies_unsup in 0 1 2 3 4; do # 0 1
+        for num_copies_pt in 0 2 4; do # 0 2 4        
         
            num_copies=(${num_copies_pt} 0 ${num_copies_unsup})
            thresh=(${thresh_pt} 0.0 ${thresh_unsup})
