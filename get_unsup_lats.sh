@@ -74,8 +74,13 @@ if [ $stage -le -3 ]; then
   if [ ! -f data/$LANG/unsup/feats.scp ]; then
     rm -rf data/$L/$unsup_dir_tag exp/make_mfcc/$L/unsup exp/make_mfcc/$L/$unsup_dir_tag
     steps/make_mfcc.sh --nj $feats_nj --cmd "$train_cmd" data/$L/unsup exp/make_mfcc/$L/unsup $mfccdir || exit 1
+    
+    # If wav.scp has m files and m < nutts, then we have only m utterances available to us although our target is to have nutts.
+    # Hence, create a subset data dir with m utterances.
+    nutts_wavscp=$(cat data/$L/unsup/wav.scp|wc -l)
+    nutts_final=$(($nutts_wavscp < $nutts?$nutts_wavscp:$nutts))
 
-    utils/subset_data_dir.sh data/$L/unsup $nutts data/$L/$unsup_dir_tag || exit 1
+    utils/subset_data_dir.sh data/$L/unsup $nutts_final data/$L/$unsup_dir_tag || exit 1
     steps/compute_cmvn_stats.sh data/$L/$unsup_dir_tag exp/make_mfcc/$L/$unsup_dir_tag $mfccdir || exit 1
     
     # delete unsup wav files which are not in the subset (saves lots of disk space)
