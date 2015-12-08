@@ -10,8 +10,8 @@
 
 . ./cmd.sh
 
-TRAIN_LANG="AR CA SW MD UR" 
-TEST_LANG="HG"
+TRAIN_LANG="AR HG SW MD UR" 
+TEST_LANG="CA"
 UNILANG_CODE=$(echo $TRAIN_LANG |sed 's/ /_/g')
 stage=$1
 
