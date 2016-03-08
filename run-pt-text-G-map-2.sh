@@ -101,11 +101,16 @@ if [ $stage -le 0 ]; then
   for f in $dir_raw_pt/*lat.fst; do
   # fstprune --weight=2.0 $f | fstprint | awk -v disambig=$disambig_sym \
   # '{if (NF > 3 && $3 == 0) $3 = disambig; print}' | fstcompile | fstarcsort  > $dir_fsts/tmp.fst
-    fstprune --weight=2.0 $f | fstarcsort  > $dir_fsts/tmp.fst
-
-    fstcompose $dir_fsts/G_new.fst $dir_fsts/tmp.fst | fstarcsort | fstprune --weight=1.0 > $dir_fsts/${f##/*/}
-
-    rm $dir_fsts/tmp.fst
+    echo "Composing G_new.fst with $f"
+    if [ "${TEST_LANG}" == "CA" ]
+    then      
+       fstarcsort $f > $dir_fsts/tmp.fst
+       fstcompose $dir_fsts/G_new.fst $dir_fsts/tmp.fst | fstarcsort | fstprune --weight=1.0 > $dir_fsts/${f##/*/}
+    else
+       fstprune --weight=2.0 $f | fstarcsort  > $dir_fsts/tmp.fst
+       fstcompose $dir_fsts/G_new.fst $dir_fsts/tmp.fst | fstarcsort | fstprune --weight=1.0 > $dir_fsts/${f##/*/}
+    fi
+    rm $dir_fsts/tmp.fst 2>/dev/null
     #break
   done
   echo ------------------------------------------

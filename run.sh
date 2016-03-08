@@ -14,8 +14,8 @@
 
 . ./cmd.sh
 
-TRAIN_LANG="AR HG SW CA UR" 
-TEST_LANG="MD"
+TRAIN_LANG="AR CA HG MD UR" 
+TEST_LANG="SW"
 UNILANG_CODE=$(echo $TRAIN_LANG |sed 's/ /_/g')
 stage=$1
 
@@ -36,7 +36,7 @@ fi
 
 # =========================================
 if [[ $stage -le 1 ]]; then
-## Do a MAP adaptation of the multilingual GMM-HMM to PT (probabilistic transcripts) of test language. MAP adapted HMM-HMM is saved in exp/tri3c.
+## Do a MAP adaptation of the multilingual GMM-HMM to PT (probabilistic transcripts) of test language. MAP adapted GMM-HMM is saved in exp/tri3c.
 ./run-pt-text-G-map-2.sh  "${TRAIN_LANG}" "${TEST_LANG}"
 fi
 # =========================================
@@ -88,7 +88,7 @@ if [[ $stage -le 20 ]]; then
   cp -Lr exp/tri3b/${TEST_LANG}/decode_dev_${TEST_LANG} exp/tri3b_ali/${TEST_LANG}/decode_dev_${TEST_LANG}
   cp -Lr exp/tri3b/${TEST_LANG}/decode_eval_${TEST_LANG} exp/tri3b_ali/${TEST_LANG}/decode_eval_${TEST_LANG}
   
-  # Now fine tine the DNN using the decoded unsup lattice. Use different levels of frame weighting derived from best path lattice.
+  # Now fine tune the DNN using the decoded unsup lattice. Use different levels of frame weighting derived from best path lattice.
   # Use the fMLLR transforms from tri3b_ali/decode_* and training lattices from the DNN directory ${lats_unsup_dir}
   thresh=0.5
   ./run_dnn_adapt_to_mono_pt_frame_wt.sh --transform-dir-train "exp/tri3b_ali/${TEST_LANG}/decode_${unsup_dir_tag}_${TEST_LANG}" --replace-softmax "true" --threshold ${thresh} \
