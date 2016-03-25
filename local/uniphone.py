@@ -86,7 +86,12 @@ uniphone_map = {
     'ʕː': 'ʕ',
     'θː': 'θ',
     'ɔː': 'ɔ',
-    'uɪ': 'u ɪ'
+    'uɪ': 'u ɪ',
+    'ʷ’': 'w',     # Amharic to multilingual
+    'p’':  'pʰ',   # Amharic to multilingual
+    't’': 'tʰ',    # Amharic to multilingual
+    'tʃ’' : 'tʃʰ', # Amharic to multilingual
+    'ts’' : 'tsʰ'  # Amharic to multilingual
 }
 
 for line in sys.stdin:

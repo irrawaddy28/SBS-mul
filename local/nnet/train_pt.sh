@@ -26,7 +26,7 @@ nnet_binary=true
 
 # FEATURE PROCESSING
 copy_feats=true # resave the train/cv features into /tmp (disabled by default)
- copy_feats_tmproot= # tmproot for copy-feats (optional)
+copy_feats_tmproot= # tmproot for copy-feats (optional)
 # feature config (applies always)
 cmvn_opts=
 delta_opts=

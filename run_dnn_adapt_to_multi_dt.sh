@@ -25,9 +25,16 @@ feats_nj=4
 train_nj=8
 decode_nj=4
 precomp_dbn=
-precomp_dnn= 
+precomp_dnn=
+hid_layers=6
+hid_dim=1024
+splice=5         # temporal splicing
+splice_step=1    # stepsize of the splicing (1 == no gap between frames)
+bn_dim=
 train_iters=20
 use_delta=false
+skip_decode=false
+train_dbn=true # by default, train a dbn
 # End of config.
 
 . utils/parse_options.sh || exit 1;
@@ -47,8 +54,9 @@ nnetinitdir=$6
 nnetoutdir=$7
 
 UNILANG_CODE=$(echo $TRAIN_LANG |sed 's/ /_/g')
-[[ ! -z ${precomp_dnn} ]] && use_dbn=false || use_dbn=true 
-$use_dbn && echo "Using a pre-trained DBN to init target DNN" || echo "Using pre-trained DNN to init target DNN"
+[[ ! -z ${precomp_dnn} ]] && train_dbn=false
+[[ ! -z ${precomp_dbn} ]] && train_dbn=true
+$train_dbn && echo "Will use a DBN to init target DNN" || echo "Will either use - a) randomly initialized DNN or b) supplied DNN - to init target DNN"
 
 #echo ==========================
 #if [ $stage -le 0 ]; then
@@ -81,117 +89,132 @@ if [ $stage -le 1 ]; then
   done
   
   # train
-  dir=$data_fmllr/${UNILANG_CODE}/train
-  steps/nnet/make_fmllr_feats.sh --nj $feats_nj --cmd "$train_cmd" \
-     --transform-dir $alidir \
-     $dir data/${UNILANG_CODE}/train $alidir $dir/log $dir/data || exit 1
-  steps/compute_cmvn_stats.sh $dir $dir/log $dir/data || exit 1;
-  utils/validate_data_dir.sh --no-text $dir 
-  
-  # split the data : 90% train 10% cross-validation (held-out)
-  utils/subset_data_dir_tr_cv.sh $dir ${dir}_tr90 ${dir}_cv10 || exit 1
-fi
+  for lang in ${UNILANG_CODE} ; do
+    dir=$data_fmllr/$lang/train
+    steps/nnet/make_fmllr_feats.sh --nj $feats_nj --cmd "$train_cmd" \
+      --transform-dir $alidir \
+      $dir data/$lang/train $alidir $dir/log $dir/data || exit 1
+    steps/compute_cmvn_stats.sh $dir $dir/log $dir/data || exit 1;
+    utils/validate_data_dir.sh --no-text $dir
+      
+    # split the data : 90% train 10% cross-validation (held-out)
+    utils/subset_data_dir_tr_cv.sh $dir ${dir}_tr90 ${dir}_cv10 || exit 1
+  done
+fi  
 
-#if [[ ! -z ${precomp_dbn} ]]; then
-#	nnetinitdir=exp/dnn4_pretrain-dbn/${TEST_LANG}/outdbn  #out-of-domain dbn (dbn learned from a corpus different than target corpus)
-#elif [[ ! -z ${precomp_dnn} ]]; then
-#	nnetinitdir=exp/dnn4_pretrain-dbn/${TEST_LANG}/outdnn  #out-of-domain dnn (dnn learned from a corpus different than  target corpus)
-#else
-#	nnetinitdir=exp/dnn4_pretrain-dbn/${TEST_LANG}/indbn #in-domain dbn (dbn learned from this target corpus)
-#fi
 if [ $stage -le 2 ]; then
-# First check for pre-computed DBN dir. Then try pre-computed DNN dir. If both fail, generate DBN now.
-  mkdir -p $nnetinitdir
-  if [[ ! -z ${precomp_dbn} ]]; then
-	echo "using pre-computed dbn ${precomp_dbn}"	
+	if $train_dbn ; then
+	# First check for pre-computed DBN dir. Then try pre-computed DNN dir. If both fail, generate DBN now.
+	  mkdir -p $nnetinitdir
+	  if [[ ! -z ${precomp_dbn} ]]; then
+		echo "using pre-computed dbn ${precomp_dbn}"
+		
+		# copy the dbn and feat xform from dbn dir	
+		cp -r ${precomp_dbn} $nnetinitdir 
+		
+		# Comment lines below if you want to compute feature xform estmn from the adaptation data (SBS)
+		#cp $(dirname ${precomp_dbn})/final.feature_transform $dir
+		#feature_transform=$dir/final.feature_transform
+		#feature_transform_opt=$(echo "--feature-transform $feature_transform")	  
+	  else
+	    echo "train with a randomly initialized DBN"
+	    
+		# Pre-train DBN, i.e. a stack of RBMs (small database, smaller DNN)	
+		(tail --pid=$$ -F $nnetinitdir/log/pretrain_dbn.log 2>/dev/null)& # forward log
 	
-	# copy the dbn and feat xform from dbn dir	
-	cp -r ${precomp_dbn} $nnetinitdir 
-	
-	# Comment lines below if you want to compute feature xform estmn from the adaptation data (SBS)
-	#cp $(dirname ${precomp_dbn})/final.feature_transform $dir
-	#feature_transform=$dir/final.feature_transform
-	#feature_transform_opt=$(echo "--feature-transform $feature_transform")  
-  elif [[ ! -z ${precomp_dnn} ]]; then
-	echo "using pre-computed dnn ${precomp_dnn}"	
-	
-	# replace the softmax layer of the precomp dnn with a random init layer
-	nnet_init=$nnetinitdir/nnet.init
-	rm -rf ${nnet_init}
-	perl local/utils/nnet/renew_nnet_softmax.sh $gmmdir/final.mdl ${precomp_dnn} ${nnet_init}
-	
-	# Comment lines below if you want to compute feature xform estmn from the adaptation data (SBS)	
-	#cp $(dirname ${precomp_dnn})/final.feature_transform $dir  
-	#feature_transform=$dir/final.feature_transform
-	#feature_transform_opt=$(echo "--feature-transform $feature_transform")
-  else
-    echo "train with a randomly initialized DBN"
-    
-	# Pre-train DBN, i.e. a stack of RBMs (small database, smaller DNN)	
-	(tail --pid=$$ -F $nnetinitdir/log/pretrain_dbn.log 2>/dev/null)& # forward log
-	$cuda_cmd $nnetinitdir/log/pretrain_dbn.log \
-		steps/nnet/pretrain_dbn.sh --nn-depth 6 --hid-dim 1024 \
-		--cmvn-opts "--norm-means=true --norm-vars=true" \
-		--delta-opts "--delta-order=2" --splice 5 \
-		--rbm-iter 20 $data_fmllr/${UNILANG_CODE}/train $nnetinitdir || exit 1;  
-  fi
+	    if [[ ! -z $bn_layer ]]; then
+	      $cuda_cmd $nnetinitdir/log/pretrain_dbn.log \
+		  local/nnet/pretrain_dbn.sh --nn-depth $hid_layers --hid-dim $hid_dim \
+		    --bn-layer $bn_layer --bn-dim $bn_dim	--splice $splice --splice-step $splice_step	\
+		    --cmvn-opts "--norm-means=true --norm-vars=true" \
+		    --delta-opts "--delta-order=2" --splice 5 \
+		    --rbm-iter 20 $data_fmllr/${UNILANG_CODE}/train $nnetinitdir || exit 1;
+	    else
+		  $cuda_cmd $nnetinitdir/log/pretrain_dbn.log \
+		  steps/nnet/pretrain_dbn.sh --nn-depth $hid_layers --hid-dim $hid_dim \
+		  --splice $splice --splice-step $splice_step \
+		    --cmvn-opts "--norm-means=true --norm-vars=true" \
+			--delta-opts "--delta-order=2" --splice 5 \
+			--rbm-iter 20 $data_fmllr/${UNILANG_CODE}/train $nnetinitdir || exit 1;
+	    fi  
+	   fi
+	fi
 fi
-
 
 dir=$nnetoutdir
-#if [[ ! -z ${precomp_dbn} ]]; then
-#	dir=exp/dnn4_pretrain-dbn_dnn/${TEST_LANG}/outdbn  #out-of-domain dbn (dbn learned from a corpus different than target corpus)
-#elif [[ ! -z ${precomp_dnn} ]]; then
-#	dir=exp/dnn4_pretrain-dbn_dnn/${TEST_LANG}/outdnn  #out-of-domain dnn (dnn learned from a corpus different than  target corpus)
-#else
-#	dir=exp/dnn4_pretrain-dbn_dnn/${TEST_LANG}/indbn #in-domain dbn (dbn learned from this target corpus)
-#fi
 if [ $stage -le 3 ]; then
   # Train the DNN optimizing per-frame cross-entropy.  
   ali=$alidir
-  feature_transform=
-  #dir=${nnetinitdir}_dnn
+  feature_transform=  
   (tail --pid=$$ -F $dir/log/train_nnet.log 2>/dev/null)& # forward log    
   # Train
-  if ${use_dbn}; then
+  if $train_dbn; then
   # Initialize NN training with a DBN
-  dbn=${nnetinitdir}/6.dbn
+  echo "using DBN to start DNN training"
+  dbn=${nnetinitdir}/${hid_layers}.dbn
   $cuda_cmd $dir/log/train_nnet.log \
-    steps/nnet/train.sh  --dbn $dbn --hid-layers 0 \
-    --cmvn-opts "--norm-means=true --norm-vars=true" \
-    --delta-opts "--delta-order=2" --splice 5 \
+  steps/nnet/train.sh  --dbn $dbn --hid-layers 0 \
+	--cmvn-opts "--norm-means=true --norm-vars=true" \
+    --delta-opts "--delta-order=2" --splice $splice --splice-step $splice_step \
     --learn-rate 0.008 \
     $data_fmllr/${UNILANG_CODE}/train_tr90 $data_fmllr/${UNILANG_CODE}/train_cv10 data/${UNILANG_CODE}/lang $ali $ali $dir || exit 1;
-  else
-  nnet_init=${nnetinitdir}/nnet.init
-  # Initialize NN training with the hidden layers of a DNN
-  $cuda_cmd $dir/log/train_nnet.log \
-    steps/nnet/train.sh --nnet-init ${nnet_init} --hid-layers 0 \
-    --cmvn-opts "--norm-means=true --norm-vars=true" \
-    --delta-opts "--delta-order=2" --splice 5 \
-    --learn-rate 0.008 \
-    $data_fmllr/${UNILANG_CODE}/train_tr90 $data_fmllr/${UNILANG_CODE}/train_cv10 data/${UNILANG_CODE}/lang $ali $ali $dir || exit 1;
+     
+    # Train nnet from scratch if BN-DBN does not train properly.
+    #steps/nnet/train.sh  --hid-layers $hid_layers --hid-dim 1024 --bn-dim $bn_dim \
+    #--cmvn-opts "--norm-means=true --norm-vars=true" \
+    #--delta-opts "--delta-order=2" --splice 5 \
+    #--learn-rate 0.008 \
+    #$data_fmllr/${UNILANG_CODE}/train_tr90 $data_fmllr/${UNILANG_CODE}/train_cv10 data/${UNILANG_CODE}/lang $ali $ali $dir || exit 1;
+  else    
+     if [[ -f ${precomp_dnn} ]]; then
+		echo "using pre-computed dnn ${precomp_dnn} to start DNN training"		
+		# replace the softmax layer of the precomp dnn with a random init layer
+		[[ ! -d $nnetinitdir ]] && mkdir -p $nnetinitdir 
+		nnet_init=$nnetinitdir/nnet.init		
+		perl local/utils/nnet/renew_nnet_softmax.sh $gmmdir/final.mdl ${precomp_dnn} ${nnet_init}
+		# Comment lines below if you want to compute feature xform estmn from the adaptation data (SBS)	
+		#cp $(dirname ${precomp_dnn})/final.feature_transform $dir  
+		#feature_transform=$dir/final.feature_transform
+		#feature_transform_opt=$(echo "--feature-transform $feature_transform")
+		$cuda_cmd $dir/log/train_nnet.log \
+		steps/nnet/train.sh --nnet-init ${nnet_init} --hid-layers 0 \
+			--cmvn-opts "--norm-means=true --norm-vars=true" \
+			--delta-opts "--delta-order=2" --splice $splice --splice-step $splice_step \
+			--learn-rate 0.008 \
+			$data_fmllr/${UNILANG_CODE}/train_tr90 $data_fmllr/${UNILANG_CODE}/train_cv10 data/${UNILANG_CODE}/lang $ali $ali $dir || exit 1;
+	 else
+	    echo "using a randomly initialized DNN to start DNN training"
+	    $cuda_cmd $dir/log/train_nnet.log \
+		steps/nnet/train.sh --hid-layers $hid_layers --hid-dim $hid_dim \
+			${bn_dim:+ --bn-dim $bn_dim} \
+			--cmvn-opts "--norm-means=true --norm-vars=true" \
+			--delta-opts "--delta-order=2" --splice $splice --splice-step $splice_step \
+			--learn-rate 0.008 \
+			$data_fmllr/${UNILANG_CODE}/train_tr90 $data_fmllr/${UNILANG_CODE}/train_cv10 data/${UNILANG_CODE}/lang $ali $ali $dir || exit 1;
+	 fi
   fi
 fi
 
 
 if [ $stage -le 4 ]; then
-  # Nnet decode:
-  exp_dir=$gmmdir
-  for L in ${TRAIN_LANG} ${TEST_LANG}; do
-    echo "Decoding $L"
-    
-    graph_dir=${exp_dir}/graph_text_G_$L
-    [[ -d $graph_dir ]] || { mkdir -p $graph_dir; utils/mkgraph.sh data/$L/lang_test_text_G $exp_dir $graph_dir || exit 1; }
-  
-    (steps/nnet/decode.sh --nj 4 --cmd "$decode_cmd" --config conf/decode_dnn.config --acwt 0.2 \
-	  $graph_dir $data_fmllr/$L/dev $dir/decode_dev_text_G_$L || exit 1;) &
-    (steps/nnet/decode.sh --nj 4 --cmd "$decode_cmd" --config conf/decode_dnn.config --acwt 0.2 \
-      $graph_dir $data_fmllr/$L/eval $dir/decode_eval_text_G_$L || exit 1;) &
-      
-    (cd $dir; ln -s  decode_dev_text_G_$L decode_dev_$L; ln -s decode_eval_text_G_$L decode_eval_$L)
-  done
-  wait
+  if ! $skip_decode; then
+    # Nnet decode:
+	exp_dir=$gmmdir
+	#for L in ${TRAIN_LANG} ${TEST_LANG}; do
+	for L in ${TEST_LANG}; do
+	  echo "Decoding $L"
+	   
+	  graph_dir=${exp_dir}/graph_text_G_$L
+	  [[ -d $graph_dir ]] || { mkdir -p $graph_dir; utils/mkgraph.sh data/$L/lang_test_text_G $exp_dir $graph_dir || exit 1; }
+	
+	  (steps/nnet/decode.sh --nj 4 --cmd "$decode_cmd" --config conf/decode_dnn.config --acwt 0.2 \
+		$graph_dir $data_fmllr/$L/dev $dir/decode_dev_text_G_$L || exit 1;) &
+	  (steps/nnet/decode.sh --nj 4 --cmd "$decode_cmd" --config conf/decode_dnn.config --acwt 0.2 \
+	    $graph_dir $data_fmllr/$L/eval $dir/decode_eval_text_G_$L || exit 1;) &
+	    
+	  (cd $dir; ln -s  decode_dev_text_G_$L decode_dev_$L; ln -s decode_eval_text_G_$L decode_eval_$L)
+	done
+  fi
 fi
 
 echo "Done: `date`"

@@ -23,6 +23,10 @@ stage=0
 nnet_type=dnn_small # dnn_small | dnn | bn
 remove_last_components=2
 dnn_init=
+hid_layers=
+hid_dim=
+splice=5         # temporal splicing
+splice_step=1    # stepsize of the splicing (1 == no gap between frames)
 test_block_csl=1
 
 # Multi-task training options
@@ -382,7 +386,7 @@ if [ $stage -le 1 ]; then
 fi
 
 # Train the <BlockSoftmax> system, 1st stage of Stacked-Bottleneck-Network,
-if [ $stage -le 2 ]; then  
+if [ $stage -le 2 ]; then
   case $nnet_type in
     bn)
     # Bottleneck network (40 dimensional bottleneck is good for fMLLR),
@@ -431,12 +435,12 @@ if [ $stage -le 2 ]; then
     if [[ ! -z ${dnn_init} ]]; then
 	  nnet_init=$dir/nnet.init      
       perl local/nnet/renew_nnet_softmax.sh --softmax-dim ${output_dim} --remove-last-components $remove_last_components ${ali_dir[0]}/final.mdl ${dnn_init} ${nnet_init}
-    fi
-    $cuda_cmd $dir/log/train_nnet.log \
-      local/nnet/train_pt.sh  --hid-layers 6  ${nnet_init:+ --nnet-init "$nnet_init" --hid-layers 0} \
+      
+      $cuda_cmd $dir/log/train_nnet.log \
+      local/nnet/train_pt.sh  ${nnet_init:+ --nnet-init "$nnet_init" --hid-layers 0} \
 		--learn-rate 0.008 \
         --cmvn-opts "--norm-means=true --norm-vars=true" \
-        --delta-opts "--delta-order=2" --splice 5 \
+        --delta-opts "--delta-order=2" --splice $splice --splice-step $splice_step \
         --labels-trainf "scp:$dir/ali-post/post_combined.scp" \
         --labels-crossvf "scp:$dir/ali-post/post_combined.scp" \
         --frame-weights  "scp:$dir/ali-post/frame_weights_combined.scp" \
@@ -444,7 +448,22 @@ if [ $stage -le 2 ]; then
         --copy-feats "false" \
         --proto-opts "--block-softmax-dims=${ali_dim_csl}" \
         --train-tool "nnet-train-frmshuff --objective-function=$objective_function" \
-        ${data_tr90} ${data_cv10} lang-dummy ${ali_dir[0]} ${ali_dir[0]} $dir			# ${ali_dir[0]} is used only to copy the HMM transition model    
+        ${data_tr90} ${data_cv10} lang-dummy ${ali_dir[0]} ${ali_dir[0]} $dir			# ${ali_dir[0]} is used only to copy the HMM transition model
+    else
+      $cuda_cmd $dir/log/train_nnet.log \
+      local/nnet/train_pt.sh  --hid-layers $hid_layers --hid-dim $hid_dim  \
+		--learn-rate 0.008 \
+        --cmvn-opts "--norm-means=true --norm-vars=true" \
+        --delta-opts "--delta-order=2" --splice $splice --splice-step $splice_step \
+        --labels-trainf "scp:$dir/ali-post/post_combined.scp" \
+        --labels-crossvf "scp:$dir/ali-post/post_combined.scp" \
+        --frame-weights  "scp:$dir/ali-post/frame_weights_combined.scp" \
+        --num-tgt $output_dim \
+        --copy-feats "false" \
+        --proto-opts "--block-softmax-dims=${ali_dim_csl}" \
+        --train-tool "nnet-train-frmshuff --objective-function=$objective_function" \
+        ${data_tr90} ${data_cv10} lang-dummy ${ali_dir[0]} ${ali_dir[0]} $dir			# ${ali_dir[0]} is used only to copy the HMM transition model        
+    fi    
     ;;
     dnn)
     # 6 hidden layers, 2048 simgoid neurons,
@@ -485,8 +504,7 @@ if [ $stage -le 3 ]; then
           # finally, decode
           (steps/nnet/decode.sh --nj 4 --cmd "$decode_cmd" --config conf/decode_dnn.config --acwt 0.2 --srcdir $decode_dir \
 	        $graph_dir $(dirname ${data_dir[0]})/$type $decode_dir || exit 1;) &
-	    done
-	    wait
+	    done	    
 	  done
     ;;
     *)

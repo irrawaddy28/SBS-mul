@@ -25,7 +25,14 @@ decode_nj=4
 train_iters=20
 l2_penalty=0
 transform_dir_train=
-replace_softmax=false
+splice=5         # temporal splicing
+splice_step=1    # stepsize of the splicing (1 == no gap between frames)
+hid_dim=
+hid_layers=
+precomp_dbn=
+bn_layer=
+bn_dim=
+replace_softmax=true
 
 # Frame weighting options
 threshold=0.7   # If provided, use frame thresholding -- keep only frames whose
@@ -44,6 +51,7 @@ if [ $# != 6 ]; then
    echo "Usage: $0 [options] <lang code> <gmmdir> <ptlatdir> <precomputed dnn> <fmllr fea-dir> <nnet output dir>" 
    echo "e.g.: $0 --replace-softmax true SW exp/tri3b_map_SW_pt exp/pretrain-dnn/final.nnet data-fmllr-tri3b exp/dnn"
    echo ""
+   exit 1;
 fi
 
 
@@ -56,7 +64,7 @@ nnet_dir=$6      # exp/dnn4_pretrain-dbn_dnn/${TEST_LANG}/indbn_pt
 
 [ -z $transform_dir_train ] && transform_dir_train=$gmmdir
 
-for f in $gmmdir/final.mdl $ptlatdir/lat.1.gz $precomp_dnn; do
+for f in $gmmdir/final.mdl $ptlatdir/lat.1.gz ; do
     [ ! -f $f ] && echo "$0: no such file $f" && exit 1;
 done
 
@@ -116,34 +124,71 @@ fi
 labels_trf="scp:$postdir/post.scp"
 labels_cvf=$labels_trf
 frame_weights="scp:$postdir/frame_weights.scp"
+dir=$nnet_dir
 # Start DNN training
 if [ $stage -le 3 ]; then
   # Train the DNN optimizing per-frame cross-entropy. 
   ali=$gmmdir # used only to provide tree and transition model to the nnet
   feature_transform=  # calculate unsupervised feat xform of the nnet based on the adaptation data
   mkdir -p $nnet_dir
-  nnet_init=$nnet_dir/nnet.init	  
-  if [[ ${replace_softmax} == "true" ]]; then 
-   perl local/nnet/renew_nnet_softmax.sh $gmmdir/final.mdl ${precomp_dnn} ${nnet_init}
-  else
-   cp ${precomp_dnn} ${nnet_init}
-  fi
-  echo "nnet_init = ${nnet_init}"
-  
-  (tail --pid=$$ -F $dir/log/train_nnet.log 2>/dev/null)& # forward log
-  #Initialize NN training with the hidden layers of a DNN
-  $cuda_cmd $nnet_dir/log/train_nnet.log \
-  local/nnet/train_pt.sh --nnet-init ${nnet_init} --hid-layers 0 \
-	--cmvn-opts "--norm-means=true --norm-vars=true" \
-	--delta-opts "--delta-order=2" --splice 5 \
-	--learn-rate 0.008 \
-	--labels-trainf  ${labels_trf} \
+  nnet_init=$dir/nnet.init  
+  # Train
+  if [[ -f $precomp_dbn ]]; then
+  # Initialize NN training with a DBN
+  echo "using DBN to start DNN training"
+  dbn=${precomp_dbn}
+  $cuda_cmd $dir/log/train_nnet.log \
+    local/nnet/train_pt.sh  --dbn $dbn --hid-layers 0 \
+    --cmvn-opts "--norm-means=true --norm-vars=true" \
+    --delta-opts "--delta-order=2" --splice $splice --splice-step $splice_step \
+    --learn-rate 0.008 \
+    --labels-trainf  ${labels_trf} \
 	--labels-crossvf ${labels_cvf} \
 	--frame-weights  ${frame_weights} \
 	--copy-feats "false" \
 	--train-iters ${train_iters} \
 	--train-opts "--l2-penalty ${l2_penalty}" \
-  $data_fmllr/${TEST_LANG}/train_tr90 $data_fmllr/${TEST_LANG}/train_cv10 dummy_lang $ali $ali $nnet_dir || exit 1; 
+    $data_fmllr/${TEST_LANG}/train_tr90 $data_fmllr/${TEST_LANG}/train_cv10 data/${TEST_LANG}/lang $ali $ali $dir || exit 1;
+  elif [[ -f $precomp_dnn ]]; then	  	
+	  if [[ ${replace_softmax} == "true" ]]; then
+	   echo "replacing the softmax layer of $precomp_dnn"
+	   perl local/nnet/renew_nnet_softmax.sh $gmmdir/final.mdl ${precomp_dnn} ${nnet_init}
+	  else
+	   echo "not replacing the softmax layer of $precomp_dnn"
+	   cp ${precomp_dnn} ${nnet_init}
+	  fi
+	  echo "nnet_init = ${nnet_init}"	  
+	  (tail --pid=$$ -F $dir/log/train_nnet.log 2>/dev/null)& # forward log
+	  #Initialize NN training with the hidden layers of a DNN
+	  $cuda_cmd $dir/log/train_nnet.log \
+	  local/nnet/train_pt.sh --nnet-init ${nnet_init} --hid-layers 0 \
+		--cmvn-opts "--norm-means=true --norm-vars=true" \
+		--delta-opts "--delta-order=2" --splice $splice --splice-step $splice_step \
+		--learn-rate 0.008 \
+		--labels-trainf  ${labels_trf} \
+		--labels-crossvf ${labels_cvf} \
+		--frame-weights  ${frame_weights} \
+		--copy-feats "false" \
+		--train-iters ${train_iters} \
+		--train-opts "--l2-penalty ${l2_penalty}" \
+	  $data_fmllr/${TEST_LANG}/train_tr90 $data_fmllr/${TEST_LANG}/train_cv10 dummy_lang $ali $ali $dir || exit 1;
+  else # sometimes we may not have precomputed DNN in which case let train_pt.sh initialize it
+	  (tail --pid=$$ -F $dir/log/train_nnet.log 2>/dev/null)& # forward log
+	  #Initialize NN training with the hidden layers of a DNN
+	  $cuda_cmd $dir/log/train_nnet.log \
+	  local/nnet/train_pt.sh --hid-layers $hid_layers --hid-dim  $hid_dim \
+		${bn_dim:+ --bn-dim $bn_dim} \
+		--cmvn-opts "--norm-means=true --norm-vars=true" \
+		--delta-opts "--delta-order=2" --splice $splice --splice-step $splice_step \
+		--learn-rate 0.008 \
+		--labels-trainf  ${labels_trf} \
+		--labels-crossvf ${labels_cvf} \
+		--frame-weights  ${frame_weights} \
+		--copy-feats "false" \
+		--train-iters ${train_iters} \
+		--train-opts "--l2-penalty ${l2_penalty}" \
+	  $data_fmllr/${TEST_LANG}/train_tr90 $data_fmllr/${TEST_LANG}/train_cv10 dummy_lang $ali $ali $dir || exit 1; 
+  fi  
   echo "Done training nnet in: $nnet_dir"  
 fi
 
