@@ -5,3 +5,5 @@ HG hungarian
 SW swahili
 UR urdu
 CA cantonese
+AM amharic
+DI dinka

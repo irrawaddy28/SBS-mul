@@ -60,12 +60,12 @@ popd > /dev/null
 echo "Preparing data..."
 for L in $LANGUAGES; do
     mkdir -p data/$L/local/data
-    ./local/sbs_prepare_files.sh --corpus-dir=$SBSDIR \
+    (./local/sbs_prepare_files.sh --corpus-dir=$SBSDIR \
         --trans-dir=$TRANSDIR \
         --list-dir=$LISTDIR \
         --lang-map=$CONFDIR/lang_codes.txt \
         --eng-ipa-map=$CONFDIR/eng/eng-ARPA2IPA.txt \
-        --eng-dict=$CONFDIR/eng/eng-cmu-dict.txt $L
+        --eng-dict=$CONFDIR/eng/eng-cmu-dict.txt $L ) &
 done
 wait;
 echo "Done." 

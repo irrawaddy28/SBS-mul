@@ -27,6 +27,11 @@ SBS_DATA_LISTS=${SBS_DATADIR}/lists
 export TRAIN_LANG=$1
 export TEST_LANG=$2
 export UNILANG_CODE=$(echo $TRAIN_LANG |sed 's/ /_/g')
+# add the directory of raw pt, e.g.,
+#dir_raw_pt=/export/ws15-pt-data/data/phonelattices/monophones/trainedp2let/HG_MD_UR_DT_AR_CA_SWdecode
+#dir_raw_pt=${SBS_DATADIR}/pt-stable-7/held-out-${TEST_LANG} # Unpruned probabilistic (i.e., crowdsourced) lattice (or "P" lattice) per utterance
+dir_raw_pt=${SBS_DATADIR}/pt-lats/held-out-${TEST_LANG} # Unpruned probabilistic (i.e., crowdsourced) lattice (or "P" lattice) per utterance
+
 
 #---------------------------------------------------------------------------
 # generate alignment for training data if needed, e.g., to train a dnn
@@ -42,11 +47,6 @@ fi
 # On G, add self-loop <#2>:<#2>; on pt, deletion arc is <#2>:<eps>.
 # Maybe need to make corresponding change to this stage to process 
 # different raw pt lattices. Here is an eg.
-
-# add the directory of raw pt, e.g.,
-#dir_raw_pt=/export/ws15-pt-data/data/phonelattices/monophones/trainedp2let/HG_MD_UR_DT_AR_CA_SWdecode
-#dir_raw_pt=${SBS_DATADIR}/pt-stable-7/held-out-${TEST_LANG} # Unpruned probabilistic (i.e., crowdsourced) lattice (or "P" lattice) per utterance
-dir_raw_pt=${SBS_DATADIR}/pt-icassp16/held-out-${TEST_LANG} # Unpruned probabilistic (i.e., crowdsourced) lattice (or "P" lattice) per utterance
 
 if [ -z $dir_raw_pt ]; then echo "empty dir_raw_pt" && exit 1;fi
 

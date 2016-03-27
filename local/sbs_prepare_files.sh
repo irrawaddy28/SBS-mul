@@ -112,9 +112,12 @@ for x in train dev eval; do
 
     # Processing transcripts 
     # first, map English words in transcripts to their IPA pronunciations
-    echo "Preprocess English"
-
-    ./local/sbs_english_filter.pl --ipafile $ENGMAP --dictfile $ENGDICT --utts "$tmpdir/downsample/${x}_basenames_wav" --idir "$TRANSDIR/${full_name}" --odir $tmpdir/trans
+    if [[ $LCODE != "AM" && $LCODE != "DI" ]]; then
+      echo "Preprocess English"
+      ./local/sbs_english_filter.pl --ipafile $ENGMAP --dictfile $ENGDICT --utts "$tmpdir/downsample/${x}_basenames_wav" --idir "$TRANSDIR/${full_name}" --odir $tmpdir/trans
+    else
+      echo "English filter not reqd. for $LCODE"
+    fi
 
     echo "Prepare text"
     #################################################
@@ -145,6 +148,12 @@ for x in train dev eval; do
         CA)
             local/sbs_create_phntrans_CA.py --utts $tmpdir/downsample/${x}_basenames_wav --transdir "$TRANSDIR/${full_name}" | sed 's/g/ɡ/g' | LC_ALL=en_US.UTF-8 local/uniphone.py | sed 's/ *sil */ /g' | sed 's/  \+/ /g' | sed 's/ \+$//g' | sed 's/^ \+//g' > $tmpdir/${LCODE}_${x}.trans
             ;;
+        AM)
+			local/sbs_create_phntrans_AM.sh $tmpdir/downsample/${x}_basenames_wav conf/${full_name}/g2pmap.txt $TRANSDIR/${full_name}/${full_name}.utf8.txt | LC_ALL=en_US.UTF-8 local/uniphone.py > $tmpdir/${LCODE}_${x}.trans
+			;;
+		DI)
+			local/sbs_create_phntrans_DI.sh $tmpdir/downsample/${x}_basenames_wav conf/${full_name}/g2pmap.txt $TRANSDIR/${full_name}/${full_name}.utf8.txt | LC_ALL=en_US.UTF-8 local/uniphone.py > $tmpdir/${LCODE}_${x}.trans
+			;;			
         *) 
             echo "Unknown language code $LCODE." && exit 1
     esac
