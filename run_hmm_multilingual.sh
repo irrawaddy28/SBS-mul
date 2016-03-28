@@ -193,7 +193,8 @@ steps/train_lda_mllt.sh --cmd "$train_cmd" \
 # Decode using LDA+MLLT models. It is expected that all languages which
 # have training data have significantly better error rates than the
 # test language which does not have any training data.
-for L in ${TEST_LANG} ${TRAIN_LANG}; do
+#for L in ${TEST_LANG} ${TRAIN_LANG}; do
+for L in ${TEST_LANG}; do
 graph_dir=exp/tri2b/${TEST_LANG}/graph_text_G_$L
 mkdir -p $graph_dir
 utils/mkgraph.sh data/${TEST_LANG}/lang_test_text_G exp/tri2b/${TEST_LANG} $graph_dir
@@ -233,7 +234,8 @@ steps/train_sat.sh --cmd "$train_cmd" $NUMLEAVES $NUMGAUSSIANS \
 # Decode using SAT models. It is expected that the all languages which
 # have training data have significantly better error rates than the
 # test language which does not have any training data.
-for L in ${TEST_LANG} ${TRAIN_LANG}; do
+#for L in ${TEST_LANG} ${TRAIN_LANG}; do
+for L in ${TEST_LANG}; do
 graph_dir=exp/tri3b/${TEST_LANG}/graph_text_G_$L
 mkdir -p $graph_dir
 utils/mkgraph.sh data/${TEST_LANG}/lang_test_text_G exp/tri3b/${TEST_LANG} $graph_dir
