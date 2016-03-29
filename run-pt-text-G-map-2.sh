@@ -102,8 +102,7 @@ if [ $stage -le 0 ]; then
   # fstprune --weight=2.0 $f | fstprint | awk -v disambig=$disambig_sym \
   # '{if (NF > 3 && $3 == 0) $3 = disambig; print}' | fstcompile | fstarcsort  > $dir_fsts/tmp.fst
     echo "Composing G_new.fst with $f"
-    if [ "${TEST_LANG}" == "CA" ]
-    then      
+    if [[ "${TEST_LANG}" == "CA" || "${TEST_LANG}" == "AM" || "${TEST_LANG}" == "DI" ]]; then
        fstarcsort $f > $dir_fsts/tmp.fst
        fstcompose $dir_fsts/G_new.fst $dir_fsts/tmp.fst | fstarcsort | fstprune --weight=1.0 > $dir_fsts/${f##/*/}
     else
@@ -174,14 +173,20 @@ decode_nj=4
     echo "Adapting to PTs"
     
     # Now adapt the SAT model using the decoded lattice (training "transcripts")
-    local/train_sat_map_pt.sh --cmd "$train_cmd" --num-iters ${num_iters} \
-      data/$L/train $dir_lang $alidir_g_pt $exp_dir || exit 1;
+    if [[ "${TEST_LANG}" == "AM" ]]; then
+	  local/train_sat_map_pt_AM.sh --cmd "$train_cmd" --num-iters ${num_iters} \
+		data/$L/train $dir_lang $alidir_g_pt $exp_dir || exit 1;
+	else
+	  local/train_sat_map_pt.sh --cmd "$train_cmd" --num-iters ${num_iters} \
+		data/$L/train $dir_lang $alidir_g_pt $exp_dir || exit 1;
+	fi
     echo ------------------------------------------
   fi
 
   if [ $stage -le 3 ]; then
     # Decode dev and test data of all languages  
-    for L in ${TEST_LANG} ${TRAIN_LANG}; do
+    # for L in ${TEST_LANG} ${TRAIN_LANG}; do
+    for L in ${TEST_LANG}; do
       echo "Decoding $L"
       
       graph_dir=$exp_dir/graph_text_G_$L
