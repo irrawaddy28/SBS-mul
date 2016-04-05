@@ -185,8 +185,8 @@ decode_nj=4
 
   if [ $stage -le 3 ]; then
     # Decode dev and test data of all languages  
-    # for L in ${TEST_LANG} ${TRAIN_LANG}; do
-    for L in ${TEST_LANG}; do
+    for L in ${TEST_LANG} ${TRAIN_LANG}; do
+    #for L in ${TEST_LANG}; do
       echo "Decoding $L"
       
       graph_dir=$exp_dir/graph_text_G_$L
