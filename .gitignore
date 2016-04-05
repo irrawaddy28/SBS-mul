@@ -1,3 +1,6 @@
+*~
+*.swp
+*.swo
 extra_oov.txt
 HungPriorityCorrectOrthMemory.txt
 conf/arabic
@@ -7,3 +10,8 @@ conf/mandarin/phones.txt
 conf/phones.txt
 conf/swahili/phones.txt
 conf/urdu/phones.txt
+conf/*/phones.txt
+data-fmllr*/
+exp/*
+mfcc/*
+data/*
