@@ -107,27 +107,15 @@ END
 else
   graphdir=$dir
   if [ $stage -le 0 ]; then
-    echo "$0: compiling training graphs"
-    #tra="ark:utils/sym2int.pl --map-oov $oov -f 2- $lang/words.txt $sdata/JOB/text|";   
-    #$cmd JOB=1:$nj $dir/log/compile_graphs.JOB.log  \
-    #  compile-train-graphs $dir/tree $dir/final.mdl  $lang/L.fst "$tra" \
-    #    "ark:|gzip -c >$dir/fsts.JOB.gz" || exit 1;
-
-    #dir_fsts="/export/ws15-pt-data/cliu/data/phonelattices/monophones/engg2p/mandarin_epsilon_3-sym_fixed"
-    #dir_fsts="/export/ws15-pt-data/cliu/data/phonelattices/monophones/trainedp2let/HG_SW_UR_DT_AR_MDdecode-rmeps"
+    echo "$0: compiling training graphs"    
     $cmd JOB=1:$nj $dir/log/text_pt.JOB.log \
       cut -f1 "$sdata/JOB/text" \| awk -v dir_fsts=$dir_fsts \
-      '{key=value=$1; value=value".lat.fst"; print key"\t"dir_fsts"/"value}' \
+      '{key=value=$1; value=value".TPLM.fst"; print key"\t"dir_fsts"/"value}' \
       \> "$sdata/JOB/text.pt" || exit 1;
-
-      #'{key=value=$1; value=value".saus.fst"; print key"\t"dir_fsts"/"value}' \
-
     $cmd JOB=1:$nj $dir/log/compile_graphs.JOB.log \
       compile-train-graphs-fsts-pt --read-disambig-syms=$lang/phones/disambig_new.int \
       --batch-size=1 --transition-scale=1.0 --self-loop-scale=0.1 $dir/tree $dir/final.mdl  $lang/L_disambig_new.fst  \
-      "ark:cat $sdata/JOB/text.pt|" "ark:|gzip -c >$dir/fsts.JOB.gz" || exit 1;
-      #compile-train-graphs-fsts-pt --read-disambig-syms=$lang/phones/disambig.int \
-      #--batch-size=1 --transition-scale=1.0 --self-loop-scale=0.1 $dir/tree $dir/final.mdl  $lang/L_disambig.fst  \
+      "ark:cat $sdata/JOB/text.pt|" "ark:|gzip -c >$dir/fsts.JOB.gz" || exit 1;      
   fi
 fi
 

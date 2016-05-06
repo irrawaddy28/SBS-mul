@@ -17,6 +17,12 @@
 
 echo "$0 $@"  # Print the command line for logging
 
+## Options
+stage=0
+
+# PT-Dir
+dir_raw_pt=$SBS_DATADIR/pt-lats
+
 # Bottleneck configurations
 use_bn=false
 skip_selftrain=false
@@ -32,11 +38,11 @@ splice_step_bn_stage2=2 # splice step of AM-DNN trained using BN+FMLLR feats
 
 . utils/parse_options.sh
 
-TRAIN_LANG="AR HG SW CA UR"
-TEST_LANG="MD"
+TRAIN_LANG=$1  # Example: "AM AR CA HG MD SW"
+TEST_LANG=$2   # EXample: "DI"
 UNILANG_CODE=$(echo $TRAIN_LANG |sed 's/ /_/g')
-stage=$1
 
+dir_raw_pt=$dir_raw_pt/${TEST_LANG}
 dbn_dir=exp/dnn4_pretrain-dbn/${TEST_LANG}
 dnn_dir=exp/dnn4_pretrain-dbn_dnn/${TEST_LANG}
 hmm_dir=exp/tri3c/${TEST_LANG}
@@ -58,7 +64,7 @@ fi
 # =========================================
 if [[ $stage -le 1 ]]; then
 ## Do a MAP adaptation of the multilingual GMM-HMM to PT (probabilistic transcripts) of test language. MAP adapted GMM-HMM is saved in exp/tri3c.
-./run-pt-text-G-map-2.sh  "${TRAIN_LANG}" "${TEST_LANG}"
+./run-pt-text-G-map-2.sh  "${TRAIN_LANG}" "${TEST_LANG}" ${dir_raw_pt}
 fi
 # =========================================
 

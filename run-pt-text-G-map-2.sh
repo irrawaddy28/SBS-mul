@@ -26,11 +26,8 @@ SBS_DATA_LISTS=${SBS_DATADIR}/lists
 # Set the language codes for SBS languages that we will be processing
 export TRAIN_LANG=$1
 export TEST_LANG=$2
+export dir_raw_pt=$3 # Raw (not scored by language model) and unpruned probabilistic (crowdsourced) lattice ("P") per utterance
 export UNILANG_CODE=$(echo $TRAIN_LANG |sed 's/ /_/g')
-# add the directory of raw pt, e.g.,
-#dir_raw_pt=/export/ws15-pt-data/data/phonelattices/monophones/trainedp2let/HG_MD_UR_DT_AR_CA_SWdecode
-#dir_raw_pt=${SBS_DATADIR}/pt-stable-7/held-out-${TEST_LANG} # Unpruned probabilistic (i.e., crowdsourced) lattice (or "P" lattice) per utterance
-dir_raw_pt=${SBS_DATADIR}/pt-lats/held-out-${TEST_LANG} # Unpruned probabilistic (i.e., crowdsourced) lattice (or "P" lattice) per utterance
 
 
 #---------------------------------------------------------------------------
@@ -98,7 +95,7 @@ if [ $stage -le 0 ]; then
   echo ------------------------------------------
 
   # second, compose G_new.fst with pruned pt lattices, and prune
-  for f in $dir_raw_pt/*lat.fst; do
+  for f in $dir_raw_pt/*.TPLM.fst; do
   # fstprune --weight=2.0 $f | fstprint | awk -v disambig=$disambig_sym \
   # '{if (NF > 3 && $3 == 0) $3 = disambig; print}' | fstcompile | fstarcsort  > $dir_fsts/tmp.fst
     echo "Composing G_new.fst with $f"
@@ -174,7 +171,7 @@ decode_nj=4
     
     # Now adapt the SAT model using the decoded lattice (training "transcripts")
     if [[ "${TEST_LANG}" == "AM" ]]; then
-	  local/train_sat_map_pt_AM.sh --cmd "$train_cmd" --num-iters ${num_iters} \
+	  local/train_sat_map_truncated_pt.sh --cmd "$train_cmd" --num-iters ${num_iters} \
 		data/$L/train $dir_lang $alidir_g_pt $exp_dir || exit 1;
 	else
 	  local/train_sat_map_pt.sh --cmd "$train_cmd" --num-iters ${num_iters} \
