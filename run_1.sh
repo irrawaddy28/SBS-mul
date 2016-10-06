@@ -392,6 +392,7 @@ for thresh in 0.5 0.6 0.7 0.8 ; do # full range: 0.5 0.6 0.7 0.8 0.9
 		${dnn_dir}/multisoftmax_pt_fw${thresh}_cop${num_copies} || exit 1; ) &
 	fi		
   done  # num_copies
+  wait
 done # thresh
 fi
 # =========================================
